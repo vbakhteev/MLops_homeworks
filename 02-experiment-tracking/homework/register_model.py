@@ -44,12 +44,15 @@ def train_and_log_model(data_path, params):
         # evaluate model on the validation and test sets
         valid_rmse = mean_squared_error(y_valid, rf.predict(X_valid), squared=False)
         mlflow.log_metric("valid_rmse", valid_rmse)
+
         test_rmse = mean_squared_error(y_test, rf.predict(X_test), squared=False)
         mlflow.log_metric("test_rmse", test_rmse)
 
+        mlflow.log_params(params)
+        mlflow.sklearn.log_model(rf, artifact_path='models')
+
 
 def run(data_path, log_top):
-
     client = MlflowClient()
 
     # retrieve the top_n model runs and log the models to MLflow
@@ -65,14 +68,24 @@ def run(data_path, log_top):
 
     # select the model with the lowest test RMSE
     experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
-    # best_run = client.search_runs( ...  )[0]
+    best_run = client.search_runs(
+        experiment_ids=experiment.experiment_id,
+        run_view_type=ViewType.ACTIVE_ONLY,
+        max_results=1,
+        order_by=["metrics.test_rmse ASC"]
+    )[0]
 
     # register the best model
-    # mlflow.register_model( ... )
+    model_uri = f'runs:/{best_run.info.run_id}/model'
+    mlflow.register_model(
+        model_uri=model_uri,
+        name="magnit_prod",
+    )
+
+    print(client.list_registered_models())
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--data_path",
